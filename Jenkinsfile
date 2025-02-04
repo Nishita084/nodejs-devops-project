@@ -13,7 +13,7 @@ pipeline {
         stage('Clone Repository') {
             steps {
                 // Clone the repository from GitHub
-                git url: 'https://github.com/Nishita084/nodejs-devops-project.git', credentialsId: 'github-token'
+                git branch: 'main' url: 'https://github.com/Nishita084/nodejs-devops-project.git', credentialsId: 'github-token'
             }
         }
 
