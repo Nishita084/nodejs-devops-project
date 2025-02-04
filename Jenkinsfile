@@ -45,6 +45,11 @@ pipeline {
                 '''
             }
         }
+        stage('List Files') {
+    steps {
+        sh 'ls -l'
+    }
+}
 
         stage('Deploy to EC2 Instance') {
             steps {
