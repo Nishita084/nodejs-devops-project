@@ -16,7 +16,7 @@ pipeline {
         stage('Clone Repository') {
             steps {
                 // Clone the repository from GitHub
-                git branch: '*/main', url: "${GITHUB_REPO}", credentialsId: "${GITHUB_CREDENTIALS_ID}"
+                git branch: 'main', url: "https://github.com/Nishita084/nodejs-devops-project.git"
             }
         }
 
