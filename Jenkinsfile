@@ -23,7 +23,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 // Build the Docker image from the src directory
-                sh 'docker build -t $IMAGE_NAME:latest .'
+                sh 'docker build -t myapp:latest -f DockerFile .'
                 
             }
         }
