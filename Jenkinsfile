@@ -1,88 +1,77 @@
 pipeline {
     agent any
-
+    
     environment {
-        // Define environment variables (e.g., Docker registry, repository URL, etc.)
-        ECR_REGISTRY = '588738609043.dkr.ecr.us-east-1.amazonaws.com'
-        IMAGE_NAME = 'myapp'
-        IMAGE_TAG = 'latest-18'
-        AWS_REGION = 'us-east-1'
-        GITHUB_REPO = 'https://github.com/Nishita084/nodejs-devops-project.git'
-        DOCKERFILE_PATH = 'src/Dockerfile'
-        EC2_INSTANCE = 'ec2-user@your-ec2-instance-public-ip'
+        AWS_ACCOUNT_ID = "588738609043"  // Your AWS Account ID
+        AWS_REGION = "us-east-1"         // Your AWS region
+        IMAGE_NAME = "myapp"             // Docker image name
+        ECR_URI = "588738609043.dkr.ecr.us-east-1.amazonaws.com/myapp"  // ECR URI
+        EC2_PUBLIC_IP = "18.234.134.27"  // Replace with your EC2-2 public IP
+        GITHUB_REPO = 'https://github.com/Nishita084/nodejs-devops-project.git'  // Your GitHub repository URL
+        GITHUB_CREDENTIALS_ID = 'github-token'  // Your GitHub credentials ID in Jenkins
+        EC2_KEY = 'ec2-key'  // SSH key for EC2 instance
     }
-
+    
     stages {
-        stage('Checkout SCM') {
-            steps {
-                // Checkout the source code from the repository
-                checkout scm
-            }
-        }
-
         stage('Clone Repository') {
             steps {
-                // Clone the repository again for safety or to reset workspace
-                script {
-                    git url: "${GITHUB_REPO}"
-                }
+                // Clone the repository from GitHub
+                git branch: '*/main', url: "${GITHUB_REPO}", credentialsId: "${GITHUB_CREDENTIALS_ID}"
             }
         }
 
-        stage('Build and Push Docker Image') {
+        stage('Build Docker Image') {
             steps {
-                script {
-                    // Build and tag Docker image using the Dockerfile located in 'src'
-                    sh """
-                    docker build -f ${DOCKERFILE_PATH} -t ${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} .
-                    """
-                    
-                    // Log in to AWS ECR
-                    sh """
-                    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
-                    """
+                // Build the Docker image
+                sh 'docker build -t $IMAGE_NAME:latest .'
+            }
+        }
 
-                    // Push the Docker image to the ECR repository
-                    sh """
-                    docker push ${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
-                    """
-                }
+        stage('Login to AWS ECR') {
+            steps {
+                // Login to AWS ECR using the IAM role credentials
+                sh '''
+                aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_URI
+                '''
+            }
+        }
+
+        stage('Push Docker Image to ECR') {
+            steps {
+                // Tag the Docker image and push it to ECR
+                sh '''
+                docker tag $IMAGE_NAME:latest $ECR_URI:latest
+                docker push $ECR_URI:latest
+                '''
             }
         }
 
         stage('Deploy to EC2 Instance') {
-            when {
-                // Only run this stage if previous stages were successful
-                expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
-            }
             steps {
-                script {
-                    // Deploy the Docker image to the EC2 instance
-                    sh """
-                    ssh -o StrictHostKeyChecking=no ${EC2_INSTANCE} "
-                        docker pull ${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} && 
-                        docker run -d --name ${IMAGE_NAME} ${ECR_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
-                    "
-                    """
+                sshagent(['${EC2_KEY}']) {
+                    // SSH into EC2 instance and deploy the app
+                    sh '''
+                    ssh -o StrictHostKeyChecking=no ubuntu@$EC2_PUBLIC_IP << EOF
+                    aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_URI
+                    docker pull $ECR_URI:latest
+                    docker stop myapp || true
+                    docker rm myapp || true
+                    docker run -d -p 3000:3000 --name myapp $ECR_URI:latest
+                    EOF
+                    '''
                 }
             }
         }
     }
-
+    
     post {
-        always {
-            // Clean up after each run
-            cleanWs()
-        }
-
         success {
-            // Send success message to Slack or other notification
-            slackSend (color: 'good', message: "Build and deployment successful!")
+            // Notify on successful deployment
+            echo "Deployment to EC2 was successful!"
         }
-
         failure {
-            // Send failure message to Slack or other notification
-            slackSend (color: 'danger', message: "Build or deployment failed!")
+            // Notify on failure
+            echo "Deployment failed!"
         }
     }
 }
