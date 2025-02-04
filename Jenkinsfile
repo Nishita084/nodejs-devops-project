@@ -22,8 +22,8 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                // Build the Docker image
-                sh 'docker build -t $IMAGE_NAME:latest .'
+                // Build the Docker image from the src directory
+                sh 'docker build -t $IMAGE_NAME:latest ./src'
             }
         }
 
@@ -57,6 +57,7 @@ pipeline {
                     docker stop myapp || true
                     docker rm myapp || true
                     docker run -d -p 3000:3000 --name myapp $ECR_URI:latest
+                    docker ps  # Log the running containers for verification
                     EOF
                     '''
                 }
